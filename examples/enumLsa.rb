@@ -1,5 +1,5 @@
 #!/usr/bin/ruby
-require_relative"../lib/smbRpc"
+require"smbrpc"
 
 ip = ARGV[0]
 port = 445
