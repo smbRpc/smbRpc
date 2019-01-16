@@ -1,0 +1,86 @@
+#!/usr/bin/ruby
+#gem install ruby_smb
+#gem install rex
+require"ruby_smb"
+require"bindata"
+#require_relative"packet"
+require_relative"rpcBase"
+require_relative"srvsvc"
+
+ip = "10.0.0.12"
+port = 445
+user = "administrator"
+pass = "pass1234"
+domain = "."
+share = "\\\\#{ip}\\IPC$"
+
+
+sock = TCPSocket.open(ip, port)
+dis = RubySMB::Dispatcher::Socket.new(sock)
+#puts"-"*80
+
+#client = RubySMB::Client.new(dispatcher, smb1: true, smb2: true, username: username, password: password)
+client = RubySMB::Client.new(dis, username: user, password: pass)
+#puts"-"*80
+
+#puts"login"
+client.login
+#puts"-"*80
+
+#puts"net_share_enum_all"
+#p client.net_share_enum_all(ip)
+#puts"-"*80
+
+#puts"tree_connect #{share}"
+tree = client.tree_connect(share)
+#puts"-"*80
+
+puts"create_pipe srvsvc"
+p file = tree.open_file(filename: "srvsvc", read: true, write: true)
+puts"-"*80
+
+#puts"is srvsvc connected?"
+#p pipe.is_connected?
+#puts"-"*80
+
+#puts"net_share_enum_all"
+#p file.net_share_enum_all(ip)
+#puts"-"*80
+
+bind = Bind.new(uuid: "4B324FC8-1670-01D3-1278-5A47BF6EE188",ver: 3.0)
+
+puts"write..."
+p result = file.write(data: bind.to_binary_s)
+puts"-"*80
+
+puts"read..."
+#p file.read(bytes: 0xffff)		#if not specify buffer no data wil be read
+#BinData::trace_reading do
+p bindAck = Bind_ack.read(file.read(bytes: 0xffff))		#if not specify buffer no data wil be read
+result = bindAck.p_result_list.p_result.result
+reason = bindAck.p_result_list.p_result.reason
+#assocGroupId =  bindAck.assoc_group_id
+raise "Bind Fail: %s %s"%[P_CONT_DEF_RESULT_T.key(result), P_PROVIDER_REASON_T.key(reason)] if result != 0 
+puts"-"*80
+
+shareEnum = NetShareEnumReq.new(:serverName=>"10.0.0.0")
+
+puts"shareEnum req..."
+p shareEnum
+puts"-"*80
+
+puts"shareEnum response.."
+enumRes = file.ioctl_send_recv(shareEnum).buffer
+p  NetShareEnumRes.read(enumRes)
+puts"-"*80
+
+#BinData::trace_reading do
+#  NetShareEnumRes.read(enumRes)
+#end
+
+#p enumRes.unpack("H*")
+
+file.close
+
+
+client.disconnect!

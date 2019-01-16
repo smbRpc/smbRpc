@@ -1,0 +1,151 @@
+module SmbRpc
+  class Svcctl < Rpc
+    #def initialize(ip:, port:, user:"", pass:"")
+    def initialize(**argv)
+      super(argv)
+      self.connect
+      self.bind(pipe:"svcctl")
+    end
+
+    def openScm(scAccessMask:)
+      openScmReq = OpenScmReq.new(serverName:@ip, accessMask:scAccessMask)
+      openScmRes = @file.ioctl_send_recv(openScmReq).buffer
+      openScmRes = OpenScmRes.read(openScmRes)
+      @scHandle = openScmRes.scHandle
+      result = openScmRes.windowsError
+      result == 0? result : (raise "OpenScm Fail, WinError: %i"%[result])
+    end
+
+    #[MS-SCMR] SC_MANAGER_ENUMERATE_SERVICE access right MUST have been granted to the caller when the RPC context handle 
+    #to the service record was created
+    def enumServicesStatus(type:SmbRpc::Svcctl::SERVICE_TYPE["ALL"], state:SmbRpc::Svcctl::SERVICE_STATE["SERVICE_STATE_ALL"])
+      services = []
+      idx = 0
+      loop do
+        enumServicesStatusReq = EnumServicesStatusReq.new(handle:@scHandle, bytesNeeded:512, type:type, state:state)
+        enumServicesStatusReq.resume_handle = idx
+        enumServicesStatusRes = @file.ioctl_send_recv(enumServicesStatusReq).buffer
+        enumServicesStatusRes = EnumServicesStatusRes.read(enumServicesStatusRes)
+        idx = enumServicesStatusRes.resumeIndex
+        enumServicesStatusRes.getService.each do |i|
+        services << { serviceType:i.serviceType, currentState:i.currentState, 
+                      controlsAccepted:i.controlsAccepted, win32ExitCode:i.win32ExitCode, 
+                      serviceSpecificExitCode:i.serviceSpecificExitCode, checkPoint:i.checkPoint, 
+                      waitHint:i.waitHint, serviceName:i.serviceName, displayName:i.displayName 
+                    }
+        end
+        break if enumServicesStatusRes.windowsError == 0 || enumServicesStatusRes.windowsError != 234
+      end
+      return services
+    end
+
+    def openService(serviceName:, serviceAccessMask:)
+      openServiceReq = OpenServiceReq.new(svcName:serviceName, handle:@scHandle, access:serviceAccessMask)
+      openServiceRes = @file.ioctl_send_recv(openServiceReq).buffer
+      openServiceRes = OpenServiceRes.read(openServiceRes)
+      openServiceRes.to_binary_s.bytesize
+      result = openServiceRes.windowsError
+      @serviceHandle = openServiceRes.serviceHandle if result == 0
+      result == 0? result : (raise "OpenService Fail, WinError: %i"%[result])
+    end
+
+
+    def closeService()
+      if !@serviceHandle.nil?	#close service handle if exist
+        closeServiceHandleReq = CloseServiceHandleReq.new(handle:@serviceHandle)
+        closeServiceHandleRes = @file.ioctl_send_recv(closeServiceHandleReq).buffer
+        closeServiceHandleRes = CloseServiceHandleRes.read(closeServiceHandleRes)
+        result = closeServiceHandleRes.windowsError
+        @serviceHandle = nil if result == 0
+        result == 0? result : (raise "CloseService Fail, WinError: %i"%[result])
+      end
+    end
+
+    def closeScm()
+      if !@scHandle.nil?	#close SC handle if exist
+        closeServiceHandleReq = CloseServiceHandleReq.new(handle:@scHandle)
+        closeServiceHandleRes = @file.ioctl_send_recv(closeServiceHandleReq).buffer
+        closeServiceHandleRes = CloseServiceHandleRes.read(closeServiceHandleRes)
+        result = closeServiceHandleRes.windowsError
+        @serviceHandle = nil if result == 0
+        result == 0? result : (raise "CloseSCHandle Fail, WinError: %i"%[result])
+      end
+    end
+
+    def close()	#overide Rpc(parent) close method to include close all handles before close namepipe, and ruby_smb.disconect!
+      closeService()
+      closeScm()
+      super  			#then call Rpc close method to close namepipe and call ruby_smb disconect!
+    end
+
+    def queryServiceConfig()
+      queryServiceConfigReq = QueryServiceConfigReq.new(handle:@serviceHandle, bytesNeeded:512)
+      queryServiceConfigRes = @file.ioctl_send_recv(queryServiceConfigReq).buffer
+      queryServiceConfigRes = QueryServiceConfigRes.read(queryServiceConfigRes)
+      result = queryServiceConfigRes.windowsError
+      result == 0? result : (raise "QueryServiceConfig Fail, WinError: %i"%[result])
+      config = queryServiceConfigRes.serviceConfig
+      return {
+        serviceType:config.serviceType,
+        startType:config.startType,
+        errorControl:config.errorControl,
+        tagId:config.tagId,
+        binaryPathName:config.binaryPathName.str.unpack("v*").pack("C*").chop,
+        loadOrderGroup:config.loadOrderGroup.str.unpack("v*").pack("C*").chop,
+        dependencies:config.dependencies.str.unpack("v*").pack("C*").chop,
+        serviceStartName:config.serviceStartName.str.unpack("v*").pack("C*").chop,
+        displayName:config.displayName.str.unpack("v*").pack("C*").chop
+      }
+    end
+
+    def createService(serviceName:, displayName:"", binaryPathName:,
+      desiredAccess:SmbRpc::Svcctl::SERVICE_ACCESS_MASK["SERVICE_ALL_ACCESS"],
+      serviceType:SmbRpc::Svcctl::SERVICE_STATUS_SERVICE_TYPE["SERVICE_WIN32_OWN_PROCESS"],
+      startType:SmbRpc::Svcctl::SERVICE_START_TYPE["SERVICE_DEMAND_START"],
+      errorControl:SmbRpc::Svcctl::SERVICE_ERROR_CONTROL["SERVICE_ERROR_NORMAL"])
+      createServiceReq = CreateServiceReq.new(handle:@scHandle, name:serviceName, display:displayName, path:binaryPathName, 
+					access:desiredAccess, type:serviceType, start:startType, error:errorControl)
+      sleep(1) #bad attempt to fix `ioctl_send_recv': STATUS_PENDING. might need to implement my own :(
+      createServiceRes = @file.ioctl_send_recv(createServiceReq).buffer
+      createServiceRes = CreateServiceRes.read(createServiceRes)
+      result = createServiceRes.windowsError
+      @serviceHandle = createServiceRes.serviceHandle if result == 0
+      result == 0? result : (raise "CreateService Fail, WinError: %i"%[result])
+    end
+
+    def deleteService()
+      deleteServiceReq = DeleteServiceReq.new(handle:@serviceHandle)
+      deleteServiceRes = @file.ioctl_send_recv(deleteServiceReq).buffer
+      deleteServiceRes = DeleteServiceRes.read(deleteServiceRes)
+      result = deleteServiceRes.windowsError
+      result == 0? result : (raise "DeleteService Fail, WinError: %i"%[result])
+    end
+
+    def startService()
+      startServiceReq = StartServiceReq.new(handle:@serviceHandle)
+      startServiceRes = @file.ioctl_send_recv(startServiceReq).buffer
+      startServiceRes = StartServiceRes.read(startServiceRes)
+      result = startServiceRes.windowsError
+      result == 0? result : (raise "StartService Fail, WinError: %i"%[result])
+    end
+
+    def controlService(control:SmbRpc::Svcctl::SERVICE_CONTROL["SERVICE_CONTROL_INTERROGATE"]) #default to do RQueryServiceStatus
+      controlServiceReq = ControlServiceReq.new(handle:@serviceHandle, serviceControl:control)
+      controlServiceRes = @file.ioctl_send_recv(controlServiceReq).buffer
+      controlServiceRes = ControlServiceRes.read(controlServiceRes)
+      result = controlServiceRes.windowsError
+      raise "ControlService Fail, WinError: %i"%[result] if result != 0
+      return { 
+        serviceType:controlServiceRes.serviceType, currentState:controlServiceRes.currentState,
+        controlsAccepted:controlServiceRes.controlsAccepted,
+        win32ExitCode:controlServiceRes.win32ExitCode,
+        serviceSpecificExitCode:controlServiceRes.serviceSpecificExitCode,
+        checkPoint:controlServiceRes.checkPoint,
+        waitHint:controlServiceRes.waitHint
+      }
+    end
+
+#end to cap module-class
+end
+end
+
