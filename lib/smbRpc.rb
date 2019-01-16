@@ -5,7 +5,7 @@ require"windows_error/win32"
 require"smbhash"			#nice little library to make Lm/NTLM hash
 #require"windows_error/nt_status"	#already loaded by ruby_smb
 
-$:.unshift(File.expand_path('.',__dir__))
+#$:.unshift(File.expand_path('.',__dir__))
 require"smbRpc/rpc"
 require"smbRpc/srvsvc"
 require"smbRpc/svcctl"
