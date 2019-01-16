@@ -1,5 +1,5 @@
 Gem::Specification.new do |s|
-  s.name        = 'smbrpc'
+  s.name        = 'smbRpc'
   s.version     = '0.0.1'
   s.date        = '2019-01-19'
   s.summary     = "Interface to various Windows RPC services over SMB namepipes"

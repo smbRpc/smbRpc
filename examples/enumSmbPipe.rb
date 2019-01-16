@@ -1,5 +1,5 @@
 #!/usr/bin/ruby
-require"smbrpc"
+require"smbRpc"
 
 
 ip = ARGV[0]
