@@ -51,7 +51,7 @@ module SmbRpc
         enumerationContext = samrEnumerateUsersInDomainRes.enumerationContext
         samrEnumerateUsersInDomainRes.numberOfBuffer.times do |i|
           h = {}
-          h[:rid] = samrEnumerateUsersInDomainRes.name[i].relativeId
+          h[:rid] = samrEnumerateUsersInDomainRes.name[i].relativeId.to_i
           h[:userName] = samrEnumerateUsersInDomainRes.nameNdr[i].str.unpack("v*").pack("c*")
           out << h
         end
