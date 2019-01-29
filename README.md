@@ -9,10 +9,14 @@ p policy.lookupNames(name:"guest")
 
 Currently I have only exposed some functions to the following namepipes.  I'll be adding more as I continue developing this project.
 
-epmapper
-samr
-srvsvc
-svcctl
-lsarpc
+epmapper https://svn.nmap.org/nmap-exp/drazen/var/IDL/epmapper.idl?p=25000
+
+samr [MS-SAMR]
+
+srvsvc [MS-SRVS]
+
+svcctl [MS-SCMR]
+
+lsarpc [MS-LSAD] and [MS-LSAT]
 
 Comments and suggestions are welcome, please email to rubysmbrpc@gmail.com
