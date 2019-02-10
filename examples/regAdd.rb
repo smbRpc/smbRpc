@@ -4,7 +4,7 @@ require"smbRpc"
 ip = "10.1.1.234"
 port = 445
 user = "admin"
-pass = "superSecret"
+pass = "sepersecret"
 key = "HKLM\\HARDWARE"
 
 splitKey = key.split("\\")
