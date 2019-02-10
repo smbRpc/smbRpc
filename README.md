@@ -21,4 +21,6 @@ svcctl [MS-SCMR]
 
 lsarpc [MS-LSAD] and [MS-LSAT]
 
+winreg [MS-RRP]
+
 Comments and suggestions are welcome, please email to rubysmbrpc@gmail.com

@@ -25,6 +25,11 @@ module SmbRpc
       VER_MAJOR = 1
       VER_MINOR = 0
     end
+    module Winreg
+      UUID = '338CD001-2244-31F1-AAAA-900038001003'
+      VER_MAJOR = 1
+      VER_MINOR = 0
+    end
   end
 end
 
@@ -33,6 +38,6 @@ ENDPOINT = {
   "svcctl" => SmbRpc::Endpoint::Svcctl,
   "lsarpc" => SmbRpc::Endpoint::Lsarpc,
   "epmapper" => SmbRpc::Endpoint::Epmapper,
-  "samr" => SmbRpc::Endpoint::Samr
+  "samr" => SmbRpc::Endpoint::Samr,
+  "winreg" => SmbRpc::Endpoint::Winreg
 }
-
